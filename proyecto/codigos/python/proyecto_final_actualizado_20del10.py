@@ -1,13 +1,13 @@
 import tkinter as tk
 from tkinter import messagebox, scrolledtext
-from PIL import Image, ImageTk  
+from PIL import Image, ImageTk 
 import mysql.connector
 from mysql.connector import Error
 import datetime
 import socket              
 import threading           
 import time                
-import sys # Para salir de la aplicación
+import sys 
 
 # --- Database and GUI Configuration ---
 db_config = {
@@ -19,15 +19,15 @@ db_config = {
 }
 
 # --- Configuración de Usuarios ---
-# Lista de usuarios autorizados. Todos usan la misma contraseña.
 AUTHORIZED_USERS = ["profe", "bruno", "lucas", "paulina", "gianna", "dylan"] 
 GUI_PASSWORD = "robosweeper" 
 
 # --- Socket Configuration ---
+# ¡CRÍTICO! Verifica y reemplaza con la IP local correcta de tu computadora.
 TCP_IP = '172.17.0.93' 
 TCP_PORT = 8888 
 
-# --- Funciones de Utilidad ---
+# --- Funciones de Utilidad y CRUD (omitiendo por brevedad) ---
 
 def create_connection():
     """Crea una conexión a la base de datos."""
@@ -64,14 +64,12 @@ def fetch_data(connection, table_name):
         column_names = [i[0] for i in cursor.description]
         return column_names, records
     except Error as e:
-        # Aquí no usamos messagebox porque esta función puede llamarse desde el thread principal
         print(f"Error leyendo datos de {table_name}: {e}")
         return [], []
     finally:
         cursor.close()
 
-# --- TCP Server Logic ---
-
+# --- TCP Server Logic (omitiendo por brevedad) ---
 def handle_esp32_data(conn, data):
     """Analiza el dato enviado por el ESP32 e inserta en la DB."""
     try:
@@ -93,11 +91,10 @@ def start_tcp_server():
         print(f"\n[SERVIDOR TCP] Iniciado, escuchando en {TCP_IP}:{TCP_PORT}")
     except Exception as e:
         print(f"\n[SERVIDOR TCP] ERROR: No se pudo iniciar (¿IP correcta o puerto ocupado?): {e}")
-        # Si falla el bind, intenta cerrar el servidor
         s.close()
         return
 
-    while root.winfo_exists(): # Bucle corre mientras la ventana principal esté abierta
+    while root.winfo_exists(): 
         try:
             conn_socket, addr = s.accept()
             print(f"[SERVIDOR TCP] Conexión establecida desde {addr[0]}")
@@ -112,12 +109,11 @@ def start_tcp_server():
             
             conn_socket.close()
         except Exception as e:
-            # Control de error del servidor.
             if not root.winfo_exists():
                 break
             time.sleep(1) 
     s.close()
-
+    
 # --- Funciones de la Interfaz (GUI) ---
 
 def open_user_management_window():
@@ -127,19 +123,17 @@ def open_user_management_window():
     user_mgmt_window.geometry("400x300")
     
     tk.Label(user_mgmt_window, text="Función de Gestión de Usuarios", font=("Arial", 12, "bold")).pack(pady=15)
-    
-    # Aquí iría la lógica para interactuar con la tabla 'usuarios'
-    tk.Label(user_mgmt_window, text="Esta sección se conecta a la base de datos 'usuarios'.").pack(pady=5)
-    tk.Label(user_mgmt_window, text="Próximo paso: Agregar campos para 'Registrar' y 'Eliminar'.").pack(pady=5)
+    tk.Label(user_mgmt_window, text="Esta sección interactuaría con la tabla 'usuarios'.").pack(pady=5)
+
 
 def show_main_dashboard(current_username, residuos_data, usuarios_data, estadisticas_data):
-    """Crea la ventana principal de la aplicación y muestra los datos, con el usuario logueado visible."""
+    """Crea la ventana principal de la aplicación."""
     
     data_window = tk.Toplevel(root)
     data_window.title("Dashboard de Clasificación RoboSweeper")
     data_window.geometry("800x650")
     
-    # --- ENCABEZADO (Frame con Grid) ---
+    # 1. ENCABEZADO (Frame con Grid)
     header_frame = tk.Frame(data_window)
     header_frame.pack(fill='x', padx=15, pady=10)
     
@@ -152,7 +146,7 @@ def show_main_dashboard(current_username, residuos_data, usuarios_data, estadist
     
     # Etiqueta del Usuario Logueado (Columna 0, Fila 1)
     user_info_label = tk.Label(header_frame, 
-                               text=f"Sesión activa: {current_username.upper()}", # ¡Aquí se muestra el usuario!
+                               text=f"Sesión activa: {current_username.upper()}", 
                                font=("Arial", 11, "italic"),
                                fg="#00796b") 
     user_info_label.grid(row=1, column=0, sticky="w")
@@ -165,9 +159,8 @@ def show_main_dashboard(current_username, residuos_data, usuarios_data, estadist
                             bg="#e0f7fa") 
     user_button.grid(row=0, column=1, rowspan=2, padx=(20, 0), sticky="e")
     
-    # Configurar la columna 1 para que se expanda y empuje el botón a la derecha
     header_frame.grid_columnconfigure(1, weight=1) 
-    
+
     # --- ÁREA DE DATOS (TEXT AREA) ---
     text_area = scrolledtext.ScrolledText(data_window, wrap=tk.WORD, width=100, height=30)
     text_area.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
@@ -190,27 +183,22 @@ def show_main_dashboard(current_username, residuos_data, usuarios_data, estadist
 
 def login():
     """Verifica el usuario y la contraseña, inicia el servidor TCP y muestra el dashboard."""
-    username = username_entry.get().lower() # Lee el usuario y lo convierte a minúsculas para la verificación
+    username = username_entry.get().lower() 
     password = password_entry.get()
     
-    # 1. Verificar credenciales
     if username in AUTHORIZED_USERS and password == GUI_PASSWORD:
+        root.withdraw() 
         
-        root.withdraw() # Oculta la ventana de login
-        
-        # 2. INICIA EL HILO DEL SERVIDOR TCP
         tcp_thread = threading.Thread(target=start_tcp_server, daemon=True)
         tcp_thread.start()
         
         conn = create_connection()
         if conn:
-            # 3. Obtener datos
             residuos_data = fetch_data(conn, "residuos")
             usuarios_data = fetch_data(conn, "usuarios")
             estadisticas_data = fetch_data(conn, "estadisticas")
             conn.close()
             
-            # 4. Mostrar el Dashboard principal
             show_main_dashboard(username, residuos_data, usuarios_data, estadisticas_data) 
             
     else:
@@ -220,19 +208,43 @@ def login():
 # --- GUI Setup (Ventana de Login) ---
 root = tk.Tk()
 root.title("RoboSweeper - Login")
-root.geometry("350x250") 
+root.geometry("350x300") 
+
+# ----------------------------------------------------
+# LOGO DEL PROYECTO
+# ----------------------------------------------------
+try:
+    # 1. Nombre del archivo
+    IMAGE_FILENAME = "logo.png"
+    
+    # 2. Cargar y redimensionar
+    original_image = Image.open(IMAGE_FILENAME) 
+    resized_image = original_image.resize((80, 80), Image.Resampling.LANCZOS)
+    logo_img = ImageTk.PhotoImage(resized_image)
+    
+    # 3. Crear Label y mostrar
+    logo_label = tk.Label(root, image=logo_img)
+    logo_label.image = logo_img 
+    logo_label.pack(pady=(15, 5)) 
+
+except FileNotFoundError:
+    print(f"Advertencia: El archivo de imagen '{IMAGE_FILENAME}' no fue encontrado. Asegúrese de que esté en la misma carpeta.")
+except Exception as e:
+    print(f"Error cargando la imagen (Pillow): {e}")
+    
+# ----------------------------------------------------
 
 # Etiqueta y campo de USUARIO
 username_label = tk.Label(root, text="Usuario:")
-username_label.pack(pady=(20, 0))
+username_label.pack(pady=(5, 0))
 
 username_entry = tk.Entry(root, width=30)
 username_entry.pack(pady=2)
-username_entry.focus_set() # Pone el foco inicial en este campo
+username_entry.focus_set() 
 
 # Etiqueta y campo de CONTRASEÑA
 password_label = tk.Label(root, text="Contraseña:")
-password_label.pack(pady=0) 
+password_label.pack(pady=(5, 0)) 
 
 password_entry = tk.Entry(root, show="*", width=30)
 password_entry.pack(pady=2)
