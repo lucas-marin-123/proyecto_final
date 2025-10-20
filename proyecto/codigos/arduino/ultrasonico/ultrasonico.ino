@@ -1,143 +1,138 @@
-// ---------------------------
-// Conexiones L298N
-// ---------------------------
-#define ENA 5   // Velocidad motor izquierdo (PWM)
-#define IN1 8   // Dirección motor izquierdo
-#define IN2 9
-#define ENB 6   // Velocidad motor derecho (PWM)
-#define IN3 10  // Dirección motor derecho
-#define IN4 11
+#include <SoftwareSerial.h>
+
+// Configuración de Comunicación Serial con el ESP32
+SoftwareSerial espSerial(11, 10); // RX (11), TX (10)
 
 // ---------------------------
-// Conexiones Ultrasonido
+// Conexiones de Pines
 // ---------------------------
+#define ENA 5
+#define IN1 8
+#define IN2 9
+#define ENB 6
+#define IN3_MOTOR 7
+#define IN4_MOTOR 12
+
 #define TRIG 2
 #define ECHO 3
 
-// ---------------------------
-// Conexiones TCS230
-// ---------------------------
 #define S0 4
-#define S1 7
+#define S1 A5
 #define S2 A0
 #define S3 A1
-#define OUT 12
+#define OUT 13
 
 long duracion;
 int distancia;
+String ultimaClasificacion = "Organico";
 
+// ---------------------------
+// SETUP ARDUINO
+// ---------------------------
 void setup() {
-  Serial.begin(9600);
+    Serial.begin(9600);
+    espSerial.begin(9600); // Inicia la comunicación con el ESP32
 
-  // Motores
-  pinMode(ENA, OUTPUT);
-  pinMode(IN1, OUTPUT);
-  pinMode(IN2, OUTPUT);
-  pinMode(ENB, OUTPUT);
-  pinMode(IN3, OUTPUT);
-  pinMode(IN4, OUTPUT);
+    // Inicialización de Pines...
+    pinMode(ENA, OUTPUT);
+    pinMode(IN1, OUTPUT);
+    pinMode(IN2, OUTPUT);
+    pinMode(ENB, OUTPUT);
+    pinMode(IN3_MOTOR, OUTPUT);
+    pinMode(IN4_MOTOR, OUTPUT);
+    pinMode(TRIG, OUTPUT);
+    pinMode(ECHO, INPUT);
+    pinMode(S0, OUTPUT);
+    pinMode(S1, OUTPUT);
+    pinMode(S2, OUTPUT);
+    pinMode(S3, OUTPUT);
+    pinMode(OUT, INPUT);
 
-  // Sensor ultrasonico
-  pinMode(TRIG, OUTPUT);
-  pinMode(ECHO, INPUT);
-
-  // Sensor de color
-  pinMode(S0, OUTPUT);
-  pinMode(S1, OUTPUT);
-  pinMode(S2, OUTPUT);
-  pinMode(S3, OUTPUT);
-  pinMode(OUT, INPUT);
-
-  // Configurar escala de frecuencia (20%)
-  digitalWrite(S0, HIGH);
-  digitalWrite(S1, LOW);
+    // Configurar escala de frecuencia (20%)
+    digitalWrite(S0, HIGH);
+    digitalWrite(S1, LOW);
 }
 
 // ---------------------------
-// Funciones de motores
+// Funciones de motores, sensores, y envio serial...
 // ---------------------------
 void adelante() {
-  digitalWrite(IN1, HIGH);
-  digitalWrite(IN2, LOW);
-  digitalWrite(IN3, HIGH);
-  digitalWrite(IN4, LOW);
-  analogWrite(ENA, 150);
-  analogWrite(ENB, 150);
+    digitalWrite(IN1, HIGH);
+    digitalWrite(IN2, LOW);
+    digitalWrite(IN3_MOTOR, HIGH);
+    digitalWrite(IN4_MOTOR, LOW);
+    analogWrite(ENA, 150);
+    analogWrite(ENB, 150);
 }
 
 void parar() {
-  digitalWrite(IN1, LOW);
-  digitalWrite(IN2, LOW);
-  digitalWrite(IN3, LOW);
-  digitalWrite(IN4, LOW);
+    digitalWrite(IN1, LOW);
+    digitalWrite(IN2, LOW);
+    digitalWrite(IN3_MOTOR, LOW);
+    digitalWrite(IN4_MOTOR, LOW);
 }
 
 void girarDerecha() {
-  digitalWrite(IN1, HIGH);
-  digitalWrite(IN2, LOW);
-  digitalWrite(IN3, LOW);
-  digitalWrite(IN4, HIGH);
-  analogWrite(ENA, 150);
-  analogWrite(ENB, 150);
+    digitalWrite(IN1, HIGH);
+    digitalWrite(IN2, LOW);
+    digitalWrite(IN3_MOTOR, LOW);
+    digitalWrite(IN4_MOTOR, HIGH);
+    analogWrite(ENA, 150);
+    analogWrite(ENB, 150);
 }
 
-// ---------------------------
-// Sensor ultrasonico
-// ---------------------------
 int medirDistancia() {
-  digitalWrite(TRIG, LOW);
-  delayMicroseconds(2);
-  digitalWrite(TRIG, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG, LOW);
-
-  duracion = pulseIn(ECHO, HIGH);
-  distancia = duracion * 0.034 / 2;
-  return distancia;
+    digitalWrite(TRIG, LOW); delayMicroseconds(2);
+    digitalWrite(TRIG, HIGH); delayMicroseconds(10);
+    digitalWrite(TRIG, LOW);
+    long duracion = pulseIn(ECHO, HIGH);
+    distancia = duracion * 0.034 / 2;
+    return distancia;
 }
 
-// ---------------------------
-// Sensor de color
-// ---------------------------
 int leerColor(int s2, int s3) {
-  digitalWrite(S2, s2);
-  digitalWrite(S3, s3);
-  return pulseIn(OUT, LOW);
+    digitalWrite(S2, s2);
+    digitalWrite(S3, s3);
+    return pulseIn(OUT, LOW);
 }
 
 void detectarBasura() {
-  int rojo = leerColor(LOW, LOW);
-  int azul = leerColor(LOW, HIGH);
-  int verde = leerColor(HIGH, HIGH);
+    int rojo = leerColor(LOW, LOW);
+    int azul = leerColor(LOW, HIGH);
+    int verde = leerColor(HIGH, HIGH);
 
-  Serial.print("Rojo: "); Serial.print(rojo);
-  Serial.print("  Verde: "); Serial.print(verde);
-  Serial.print("  Azul: "); Serial.println(azul);
-
-  // Clasificación simple (ejemplo, luego se calibra)
-  if (rojo < azul && rojo < verde) {
-    Serial.println("Detectado: Papel/Blanco");
-  } else if (azul < rojo && azul < verde) {
-    Serial.println("Detectado: Plastico (colores)");
-  } else {
-    Serial.println("Detectado: Organico");
-  }
+    if (rojo < azul && rojo < verde) {
+        ultimaClasificacion = "Papel";
+    } else if (azul < rojo && azul < verde) {
+        ultimaClasificacion = "Plastico";
+    } else {
+        ultimaClasificacion = "Organico";
+    }
 }
 
-void loop() {
-  int d = medirDistancia();
-  Serial.print("Distancia: ");
-  Serial.println(d);
+void enviarClasificacion() {
+    espSerial.println(ultimaClasificacion); 
+}
 
-  if (d > 20) {
-    adelante();
-    detectarBasura(); // Mientras avanza va leyendo el color
-    delay(500);
-  } else {
-    parar();
-    delay(300);
-    girarDerecha();
-    delay(600);
-    parar();
-  }
+// ---------------------------
+// LOOP ARDUINO
+// ---------------------------
+void loop() {
+    int d = medirDistancia();
+
+    if (d > 20) {
+        adelante();
+        detectarBasura(); 
+        delay(500);
+    } else {
+        parar();
+        delay(300);
+        
+        // El Arduino envía la clasificación al ESP32
+        enviarClasificacion(); 
+        
+        girarDerecha();
+        delay(600);
+        parar();
+    }
 }
